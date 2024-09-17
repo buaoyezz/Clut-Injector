@@ -52,15 +52,30 @@
 - 大改CPP
 - 更近Kernel
 
-1. **克隆仓库**：
-   ```bash
-   git clone https://github.com/buaoyezz/Nakly-Injector.git
+# 克隆仓库
+```bash
+git clone https://github.com/buaoyezz/Nakly-Injector.git
+```
 
-2. **关于构建**
-   ```bash
-   pyinstaller -F path\to\NaklyInjector.py -i path\to\logo.png -w --add-data "path\to\NaklyInject_Kernel.dll;."
- > 解释: `-F`单文件 ， `-i`软件图标 ， `-w`隐藏cmd窗口 ， `--add-data`加入额外文件
-   ```bash
-    cl /LD NaklyInjector_Kernel.cpp /link /OUT:NaklyInjector_Kernel.dll
+# 进入项目目录
+```bash
+cd Nakly-Injector
+```
+# 安装 PyInstaller（如果尚未安装）
+```bash
+pip install pyinstaller
+```
+# 使用 PyInstaller 打包 Python 程序
+# 请根据实际路径替换 path/to/ 下的内容
+```bash
+pyinstaller -F path/to/NaklyInjector.py -i path/to/logo.png -w --add-data "path/to/NaklyInject_Kernel.dll;."
+```
+# 打开 Microsoft Visual Studio 的开发者命令提示符
+# 然后在开发者命令提示符中运行以下命令编译 DLL 文件
+# 请根据实际路径替换 path/to/ 下的内容
+```bash
+cl /LD path/to/NaklyInjector_Kernel.cpp /link /OUT:NaklyInjector_Kernel.dll
+```
 
-
+# > 项目开发不易，感谢使用支持!
+## Powered By ZZBuAoYe
