@@ -1,4 +1,13 @@
 # **Clut-Injector**
+### 目录
+
+- [功能](#功能)
+- [安装](#安装)
+- [使用方法](#使用方法)
+- [注意事项](#注意事项)
+- [关于进步](#关于进步)
+- [未来计划](#未来计划)
+- [基础构建环境搭建](#基础构建环境搭建)
 
 `Clut-Injector` 是一个用于在 Windows 平台上进行注入操作的工具。它可以帮助用户将 DLL 注入到目标进程中，以便执行各种任务或修改进程行为
 
@@ -49,25 +58,23 @@
 - **兼容性**：`Clut-Injector` 主要在 Windows 平台上运行，目前不支持其他操作系统
 - **安全性**：请确保注入的 DLL 文件来自可信来源，避免潜在的安全风险 | 其次[`所有单纯的注入器都会被安全软件检测，建议拉入可信名单`，`若你不相信本程序，自己看源码并且构建即可`]
 - **关于构建**: 本程序采用的是Pyinstaller+Cl的配合，通过Pyinstaller打包并且包含dll，同时软件内调用dll，进行注入，dll使用VS的cl工具构建｀详细看下面｀
+
 ## 关于进步
 
 如果你想为 `Clut-Injector` 贡献代码或报告问题，请访问 [GitHub 仓库](https://github.com/buaoyezz/Clut-Injector/) 并提交问题或拉取请求
 
 ## 未来计划
-- 新增更多的注入方式`hook`
-- 优化更加美丽的GUI
-- 优化更多的地方
-- 大改CPP
-- 更近Kernel
+ - 做更多的优化
+ - 做更好的体验
 
 ## 基础构建环境搭建
 > 克隆仓库
 ```bash
 git clone https://github.com/buaoyezz/Clut--Injector.git
 ```
->> Tips:项目主软件基于Python 3.13.0 开发完成
+> Tips:项目主软件基于Python 3.13.0 开发完成
 >> 安装Python[Python官网](https://python.org/)
-
+>>> 开始前请`pip install -r requirements.txt`这很重要<br>
 > 安装 PyInstaller（如果尚未安装）
 ```bash
 pip install pyinstaller
@@ -89,6 +96,11 @@ call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build
 :: 编译
 cl /LD /MD ClutInject_Kernel.cpp /link /OUT:ClutInject_Kernel.dll
 ```
+> 最后-> 你需要将dll放在软件下面在DOS窗口内即可看见内核是否已经载入成功
+> 编译教程至此结束
+
 > 项目开发不易，感谢使用支持!
 >> Powered By ZZBuAoYe
->>> The End.
+## The End.
++ 感谢使用Clut-Injector
++ 持续更新ing......
