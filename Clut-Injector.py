@@ -14,7 +14,7 @@ from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QPushButton, QVBoxLayout,
     QMessageBox, QListWidget, QFileDialog, QFormLayout, QHBoxLayout,
     QDialog, QDialogButtonBox, QProgressBar, QTextEdit, QListWidgetItem,
-    QSpinBox, QLineEdit, QCheckBox, QFileIconProvider, QComboBox
+    QSpinBox, QLineEdit, QCheckBox, QFileIconProvider, QComboBox, QListWidget
 )
 from PyQt5.QtCore import (
     Qt, QThread, pyqtSignal, QRect, QPoint, QSize, QTimer, 
@@ -22,13 +22,13 @@ from PyQt5.QtCore import (
 )
 from PyQt5.QtGui import (
     QPainter, QBrush, QColor, QRegion, QIcon, QPalette,
-    QPixmap, QImage
+    QPixmap, QImage,QTextCursor
 )
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QPushButton, QVBoxLayout,
     QMessageBox, QListWidget, QFileDialog, QFormLayout, QHBoxLayout,
     QDialog, QDialogButtonBox, QProgressBar, QTextEdit, QListWidgetItem,
-    QSpinBox, QLineEdit, QCheckBox
+    QSpinBox, QLineEdit, QCheckBox, QMenu
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QRect, QPoint, QSize, QTimer, QSettings
 from PyQt5.QtGui import QPainter, QBrush, QColor, QRegion, QIcon
@@ -47,7 +47,94 @@ from win32com.client import GetObject
 from concurrent.futures import ThreadPoolExecutor
 from queue import Queue, Empty
 import threading
+ScrollBar = ("""
+    
+        /* 垂直滚动条 */
+        QScrollBar:vertical {
+            background: transparent;
+            width: 8px;
+            margin: 0px;
+            border-radius: 4px;
+        }
 
+        QScrollBar::handle:vertical {
+            background: rgba(74, 144, 217, 0.6);
+            min-height: 30px;
+            border-radius: 4px;
+            margin: 1px;
+        }
+
+        QScrollBar::handle:vertical:hover {
+            background: rgba(74, 144, 217, 0.8);
+        }
+
+        QScrollBar::handle:vertical:pressed {
+            background: rgba(74, 144, 217, 1.0);
+        }
+
+        QScrollBar::add-line:vertical,
+        QScrollBar::sub-line:vertical {
+            height: 0px;
+            background: transparent;
+        }
+
+        QScrollBar::add-page:vertical,
+        QScrollBar::sub-page:vertical {
+            background: transparent;
+        }
+
+        /* 水平滚动条 */
+        QScrollBar:horizontal {
+            background: transparent;
+            height: 8px;
+            margin: 0px;
+            border-radius: 4px;
+        }
+
+        QScrollBar::handle:horizontal {
+            background: rgba(74, 144, 217, 0.6);
+            min-width: 30px;
+            border-radius: 4px;
+            margin: 1px;
+        }
+
+        QScrollBar::handle:horizontal:hover {
+            background: rgba(74, 144, 217, 0.8);
+        }
+
+        QScrollBar::handle:horizontal:pressed {
+            background: rgba(74, 144, 217, 1.0);
+        }
+
+        QScrollBar::add-line:horizontal,
+        QScrollBar::sub-line:horizontal {
+            width: 0px;
+            background: transparent;
+        }
+
+        QScrollBar::add-page:horizontal,
+        QScrollBar::sub-page:horizontal {
+            background: transparent;
+        }
+        
+        /* 当滚动条处于非活动状态时的样式 */
+        QScrollBar::handle:vertical:disabled,
+        QScrollBar::handle:horizontal:disabled {
+            background: rgba(128, 128, 128, 0.3);
+        }
+        
+        /* 当鼠标不在窗口上时，滚动条半透明 */
+        QScrollBar:vertical:!hover,
+        QScrollBar:horizontal:!hover {
+            background: transparent;
+        }
+        
+        /* 当滚动条处于活动状态时显示阴影效果 */
+        QScrollBar::handle:vertical:hover,
+        QScrollBar::handle:horizontal:hover {
+            border: 1px solid rgba(74, 144, 217, 0.8);
+        }
+    """)
 
 class CustomTitleBar(QWidget):
     def __init__(self, parent=None):
@@ -135,6 +222,19 @@ class ProcessSelectionDialog(QDialog):
         self.process_list = QListWidget(self)
         self.search_box = QLineEdit(self)
         self.search_box.setPlaceholderText("搜索进程名或PID...")
+        self.process_list.setStyleSheet(ScrollBar + self.process_list.styleSheet() + """
+            QListWidget::item {
+                padding: 5px;
+                border-bottom: 1px solid rgba(74, 74, 74, 100);
+            }
+            QListWidget::item:selected {
+                background: rgba(74, 144, 217, 180);
+                color: white;
+            }
+            QListWidget::item:hover {
+                background: rgba(74, 144, 217, 100);
+            }
+        """)
         self.search_box.textChanged.connect(self.filter_processes)
 
         self.select_button = QPushButton('选择', self)
@@ -477,45 +577,59 @@ class InjectorGUI(QWidget):
         self.log_message("GUI初始化完成", level="INFO")
 
     def log_message(self, message, level="INFO"):
-        """修改后的日志方法，使用 QTimer 确保在主线程中更新 UI"""
-        QTimer.singleShot(0, lambda: self._safe_append_log(message, level))
-    
-    def _safe_append_log(self, message, level="INFO"):
-        """安全的日志追加方法"""
+        # 获取当前时间戳
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
+        # 定义日志级别对应的颜色
         color_map = {
-            "DEBUG": "#800080",
-            "INFO": "#00FF00",
-            "WARNING": "#FFA500",
-            "ERROR": "#FF0000",
-            "WELCOME": "<span style='font-size: 20px; background: linear-gradient(to right, #0000FF, #00FF00); color: #FFFFFF; padding: 10px; border-radius: 5px; display: inline-block;'>"
+            "DEBUG": "#800080",  # 紫色
+            "INFO": "#00FF00",   # 绿色
+            "WARNING": "#FFA500",  # 橙色
+            "ERROR": "#FF0000"   # 红色
         }
         
-        style = color_map.get(level, "#FFFFFF")
+        # 获取对应级别的颜色
+        color = color_map.get(level, "#FFFFFF")  # 默认白色
         
-        try:
-            if level == "WELCOME":
-                formatted_message = f"{style}{message}</span><br>"
-                self.log_box.setHtml(formatted_message + self.log_box.toHtml())
-            else:
-                formatted_message = f"[{level}/{current_time}] {message}"
-                self.log_box.append(f'<span style="color: {style};">{formatted_message}</span>')
-                
-            # 确保日志滚动到底部
-            self.log_box.verticalScrollBar().setValue(
-                self.log_box.verticalScrollBar().maximum()
-            )
+        # 格式化消息
+        formatted_message = f"│ [{level}/{current_time}] {message}"
+        html_message = f"<span style='color: {color};'>{formatted_message}</span><br>"
+        
+        # 保存当前内容
+        current_html = self.log_box.toHtml()
+        
+        # 在标题div后插入新消息
+        if "</div>" in current_html:
+            new_html = current_html.replace("</div>", "</div>" + html_message, 1)
+            self.log_box.setHtml(new_html)
+        else:
+            self.log_box.insertHtml(html_message)
             
-        except Exception as e:
-            # 如果出现错误且未显示过警告，则打印警
-            if not self._cursor_warning_shown:
-                print(f"日志记录出现错误: {e}")
-                self._cursor_warning_shown = True
+        # 滚动到底部
+        self.log_box.verticalScrollBar().setValue(
+            self.log_box.verticalScrollBar().maximum()
+        )
 
     def log_welcome(self):
-        message = f"Clut Injector V2.0.0 Release <br>"
-        self.log_message(message, level="WELCOME")
+        # 修改标题HTML，移除position:fixed相关样式
+        title_html = """
+            <div style="
+                background-color: rgba(30, 30, 30, 0);
+                padding: 10px;
+                margin-bottom: 10px;
+                border-radius: 5px;
+                text-align: center;
+                font-size: 24px;
+                font-weight: bold;
+                color: #00ff00;
+                border-bottom: 2px solid rgba(74, 144, 217, 0.5);
+            ">
+                Clut Injector V3.0.0 Release
+            </div>
+        """
+        
+        # 将标题HTML插入到日志框的顶部
+        self.log_box.setHtml(title_html)
 
     def initUI(self):
         layout = QHBoxLayout()
@@ -542,6 +656,21 @@ class InjectorGUI(QWidget):
         self.dll_label = QLabel('选择DLL文件:', self)
         self.dll_label.setStyleSheet("background: transparent;")  
         self.dll_list = QListWidget(self)
+        self.dll_list.setSelectionMode(QListWidget.ExtendedSelection)  # 允许多选
+        self.dll_list.setContextMenuPolicy(Qt.CustomContextMenu)  # 允许自定义右键菜单
+        self.dll_list.setStyleSheet(ScrollBar + self.dll_list.styleSheet() + """
+            QListWidget::item {
+                padding: 5px;
+                border-bottom: 1px solid rgba(74, 74, 74, 100);
+            }
+            QListWidget::item:selected {
+                background: rgba(74, 144, 217, 180);
+                color: white;
+            }
+            QListWidget::item:hover {
+                background: rgba(74, 144, 217, 100);
+            }
+        """)
         self.browse_button = QPushButton('浏览文件夹', self)
         self.browse_button.setIcon(QIcon('icons/browse.png'))
         self.browse_button.setIconSize(QSize(20, 20))
@@ -593,12 +722,11 @@ class InjectorGUI(QWidget):
         self.log_box.setReadOnly(True)
         self.log_box.setStyleSheet("""
             QTextEdit {
-                background-color: rgba(0, 0, 0, 100);  /* 更轻微的半透明黑色背景 */
-                color: #fff;
+                background-color: transparent;
                 font-family: 'Microsoft YaHei';
-                border: 1px solid #4a4a4a;
-                border-radius: 15px;
-                padding: 5px;
+                font-size: 11px;
+                color: #dcdcdc;  /* 设置文本颜色以确保可见性 */
+                border: none;  /* 可选：移除边框 */
             }
         """)
 
@@ -606,7 +734,7 @@ class InjectorGUI(QWidget):
         layout.addWidget(self.log_box)
 
         self.setLayout(layout)
-        self.setWindowTitle('Clut Injector B2001129 For windows X64')
+        self.setWindowTitle('Clut Injector Build 20250111 | Stable Release DEV: ZZBuAoYe | Base: ClutUI-Fork_V1')
         self.setGeometry(400, 400, 900, 500)
 
         # 设置QSS样式
@@ -797,8 +925,12 @@ class InjectorGUI(QWidget):
                 self.process_list.addItem(item)
                 if current_selection and pid == current_pid:  # 使用pid匹配
                     self.process_list.setCurrentItem(item)
-                
-            if self.process_list.count() == 0:
+            
+            if self.process_list.count() == 1:
+                # 如果只检测到一个进程,自动选择它
+                self.process_list.setCurrentItem(self.process_list.item(0))
+                self.log_message(f"自动选择唯一检测到的进程: {self.process_list.item(0).process_name}", level="INFO")
+            elif self.process_list.count() == 0:
                 QMessageBox.warning(self, "提示", "没有检测到相关进程")
                 self.log_message("没有检测到相关进程", level="WARNING")
                 
@@ -840,55 +972,143 @@ class InjectorGUI(QWidget):
         options = QFileDialog.Options()
         dll_files, _ = QFileDialog.getOpenFileNames(self, "选择DLL文件", "", "DLL Files (*.dll)", options=options)
         if dll_files:
-            self.dll_list.clear()
-            self.dll_list.addItems(dll_files)
-            self.log_message(f"已选择 {len(dll_files)} 个DLL文件", level="INFO")
+            existing_files = set(self.dll_list.item(i).text() for i in range(self.dll_list.count()))
             for dll in dll_files:
-                self.log_message(f"DLL文件路径: {dll}", level="DEBUG")
+                if dll not in existing_files:
+                    formatted_path = self.format_file_path(dll)
+                    item = QListWidgetItem(formatted_path)
+                    item.setToolTip(dll)  # 添加完整路径作为提示
+                    self.dll_list.addItem(item)
+            self.log_message(f"已添加 {len(dll_files)} 个DLL文件", level="INFO")
         else:
             self.log_message("未选择任何DLL文件", level="WARNING")
+
+    def show_dll_context_menu(self, position):
+        menu = QMenu()
+        remove_action = menu.addAction("移除选中的DLL")
+        clear_action = menu.addAction("清空所有DLL")
+        
+        action = menu.exec_(self.dll_list.mapToGlobal(position))
+        
+        if action == remove_action:
+            self.remove_selected_dlls()
+        elif action == clear_action:
+            self.clear_all_dlls()
+
+    def remove_selected_dlls(self):
+        selected_items = self.dll_list.selectedItems()
+        if not selected_items:
+            return
+            
+        for item in selected_items:
+            self.dll_list.takeItem(self.dll_list.row(item))
+        self.log_message(f"已移除 {len(selected_items)} 个DLL文件", level="INFO")
+
+    def clear_all_dlls(self):
+        if self.dll_list.count() > 0:
+            reply = QMessageBox.question(
+                self,
+                "确认清空",
+                "确定要清空所有DLL文件吗？",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+            
+            if reply == QMessageBox.Yes:
+                self.dll_list.clear()
+                self.log_message("已清空所有DLL文件", level="INFO")
+
     def injectDLL(self):
-        self.log_message("开始DLL注入流程", level="DEBUG")
         selected_item = self.process_list.currentItem()
         if not selected_item:
             QMessageBox.warning(self, "错误", "请先选择一个游戏进程")
             self.log_message("注入失败: 未选择目标进程", level="ERROR")
             return
 
-        process_info = selected_item.text()
-        process_id = int(process_info.split()[1])  # 从显示的PID中提取出进程ID
-
-        dll_files = [self.dll_list.item(i).text() for i in range(self.dll_list.count())]
-        if not dll_files:
+        # 获取选中的DLL文件
+        selected_dlls = [self.dll_list.item(i).text() for i in range(self.dll_list.count())]
+        if not selected_dlls:
             QMessageBox.warning(self, "错误", "请先选择要注入的DLL文件")
             self.log_message("请先选择要注入的DLL文件", level="WARNING")
             return
 
+        # 检查进程选择
+        if self.process_list.count() == 1 and not selected_item:
+            # 如果只有一个进程且未选择,自动选择该进程
+            selected_item = self.process_list.item(0)
+            self.process_list.setCurrentItem(selected_item)
+        elif not selected_item:
+            QMessageBox.warning(self, "错误", "请先选择一个游戏进程")
+            self.log_message("注入失败: 未选择目标进程", level="ERROR") 
+            return
+
+        process_info = selected_item.text()
+        process_id = selected_item.pid  # 使用存储的pid
+        process_name = selected_item.process_name # 使用存储的进程名
+
+        # 如果只有一个DLL文件,直接注入
+        if len(selected_dlls) == 1:
+            dlls_to_inject = selected_dlls
+        else:
+            # 显示DLL选择对话框
+            dialog = QDialog(self)
+            dialog.setWindowTitle("选择要注入的DLL")
+            dialog.setStyleSheet(ScrollBar)
+            layout = QVBoxLayout()
+
+            dll_list_widget = QListWidget()
+            dll_list_widget.setSelectionMode(QListWidget.ExtendedSelection)
+            dll_list_widget.setStyleSheet(ScrollBar)
+            for dll in selected_dlls:
+                item = QListWidgetItem(dll)
+                item.setCheckState(Qt.Checked)  # 默认全选
+                dll_list_widget.addItem(item)
+
+            layout.addWidget(QLabel("请选择要注入的DLL文件:"))
+            layout.addWidget(dll_list_widget)
+
+            buttons = QDialogButtonBox(
+                QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+            )
+            buttons.accepted.connect(dialog.accept)
+            buttons.rejected.connect(dialog.reject)
+            layout.addWidget(buttons)
+
+            dialog.setLayout(layout)
+
+            if dialog.exec_() == QDialog.Accepted:
+                # 获取选中的DLL
+                dlls_to_inject = []
+                for i in range(dll_list_widget.count()):
+                    item = dll_list_widget.item(i)
+                    if item.checkState() == Qt.Checked:
+                        dlls_to_inject.append(item.text())
+
+                if not dlls_to_inject:
+                    QMessageBox.warning(self, "错误", "未选择任何DLL文件")
+                    return
+
+        # 修改确认消息框显示进程名而不是PID
         reply = QMessageBox.question(
             self,
             "确认注入",
-            f"即将向进程 {process_id} 注入 {len(dll_files)} 个DLL文件\n是否继续？",
+            f"即将向进程 {process_name} 注入 {len(dlls_to_inject)} 个DLL文件\n是否继续？",
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No
         )
         
-        if reply == QMessageBox.No:
-            return
+        if reply == QMessageBox.Yes:
+            if process_id not in self.injected_dlls:
+                self.injected_dlls[process_id] = []
+            self.injected_dlls[process_id].extend(dlls_to_inject)
             
-        # 保存已注入的DLL信息
-        if process_id not in self.injected_dlls:
-            self.injected_dlls[process_id] = []
-        self.injected_dlls[process_id].extend(dll_files)
-        
-        self.progress_bar.setValue(0)
-        self.worker = InjectorWorker(process_id, dll_files, self)
-        self.worker.progress.connect(self.progress_bar.setValue)
-        self.worker.finished.connect(self.on_injection_finished)
-        self.worker.start()
-        
-        # 禁用注入按钮，防止重复操作
-        self.inject_button.setEnabled(False)
-
+            self.progress_bar.setValue(0)
+            self.worker = InjectorWorker(process_id, dlls_to_inject, self)
+            self.worker.progress.connect(self.progress_bar.setValue)
+            self.worker.finished.connect(self.on_injection_finished)
+            self.worker.start()
+            
+            self.inject_button.setEnabled(False)
 
     def show_about_dialog(self):
         about_dialog = QDialog(self)
@@ -898,11 +1118,11 @@ class InjectorGUI(QWidget):
         layout = QVBoxLayout()
         
         # 标题
-        title_label = QLabel("Clut Inject")
+        title_label = QLabel("Clut Inject Ver 3.0.0")
         title_label.setAlignment(Qt.AlignCenter)
         
         # 版本
-        version_label = QLabel("Version 2.0.0")
+        version_label = QLabel("Version 3.0.0")
         version_label.setAlignment(Qt.AlignCenter)
         
         # 作者
@@ -911,10 +1131,13 @@ class InjectorGUI(QWidget):
         
         # 描述
         desc_label = QLabel(
-            "Powered by the powerful combination of\n"
-            "Python and C++\n\n"
+            "A Tool For Injecting DLLs Into The Processes.\n"
+            "Use Python And C++ To Develop.\n\n"
             "Kernel development by C++\n"
-            "Main program development by Python"
+            "Main program development by Python\n"
+            "UI design by PyQt5\n"
+            "Icon design by IconFinder\n"
+            "Powered By ZZBuAoYe 2025"
         )
         desc_label.setAlignment(Qt.AlignCenter)
         desc_label.setWordWrap(True)
@@ -956,6 +1179,7 @@ class InjectorGUI(QWidget):
             font-size: 14px;
             color: #888888;
             background-color: transparent;
+            
         }
         QLabel:nth-child(3) {  /* 作者 */
             font-size: 14px;
@@ -1017,73 +1241,165 @@ class InjectorGUI(QWidget):
             )
             self.log_message("DLL注入失败！", level="ERROR")
 
-    def uninjectDLL(self):
+    def uninjectDLL(self): # 没修好，坏的
         selected_item = self.process_list.currentItem()
         if not selected_item:
-            QMessageBox.warning(self, "错误", "请先选择一个游戏进程")
-            self.log_message("请先选择一个游戏进程", level="ERROR")
+            QMessageBox.warning(self, "错误", "请先选择一个进程")
+            self.log_message("请先选择一个进程", level="ERROR")
             return
 
-        process_info = selected_item.text()
-        process_id = int(process_info.split()[1])  # 从显示的PID中提取出进程ID
+        process_id = int(selected_item.text().split()[1])
 
         if process_id not in self.injected_dlls or not self.injected_dlls[process_id]:
-            QMessageBox.warning(self, "错误", "没有DLL可取消注入")
-            self.log_message("没有DLL可取消注入", level="ERROR")
+            QMessageBox.warning(self, "错误", "该进程没有已注入的DLL")
+            self.log_message("该进程没有已注入的DLL", level="WARNING")
             return
 
-        # 获取进程句柄
+        # 显示已注入DLL的选择对话框
+        dialog = QDialog(self)
+        dialog.setWindowTitle("选择要卸载的DLL")
+        layout = QVBoxLayout()
+
+        dll_list = QListWidget()
+        dll_list.setSelectionMode(QListWidget.ExtendedSelection)
+        for dll_path in self.injected_dlls[process_id]:
+            item = QListWidgetItem(self.format_file_path(dll_path))
+            item.setToolTip(dll_path)  # 显示完整路径
+            item.setCheckState(Qt.Checked)  # 默认全选
+            dll_list.addItem(item)
+
+        layout.addWidget(QLabel("请选择要卸载的DLL:"))
+        layout.addWidget(dll_list)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        )
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+
+        dialog.setLayout(layout)
+
+        if dialog.exec_() != QDialog.Accepted:
+            return
+
+        # 获取选中的DLL
+        dlls_to_uninject = []
+        for i in range(dll_list.count()):
+            item = dll_list.item(i)
+            if item.checkState() == Qt.Checked:
+                dlls_to_uninject.append(item.toolTip())  # 使用完整路径
+
+        if not dlls_to_uninject:
+            QMessageBox.warning(self, "错误", "未选择任何DLL")
+            return
+
         try:
+            # 获取进程句柄
             h_process = ctypes.windll.kernel32.OpenProcess(0x1F0FFF, False, process_id)
             if not h_process:
-                QMessageBox.critical(self, "错误", "法打开进程")
-                self.log_message("无法打开进程", level="ERROR")
-                return
+                raise Exception("无法打开进程")
 
-            # 获取所有加载的模块
-            h_modules = (ctypes.c_void_p * 1024)()
-            needed = ctypes.c_ulong()
-            ctypes.windll.psapi.EnumProcessModules(h_process, ctypes.byref(h_modules), ctypes.sizeof(h_modules),
-                                                   ctypes.byref(needed))
-            num_modules = needed.value // ctypes.sizeof(ctypes.c_void_p)
+            kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
+            psapi = ctypes.WinDLL('psapi', use_last_error=True)
 
-            success = True
-            for dll_path in self.injected_dlls[process_id]:
-                h_module = None
-
-                # 找到与dll_path匹配的模块
-                for i in range(num_modules):
-                    module_name = ctypes.create_string_buffer(255)
-                    ctypes.windll.psapi.GetModuleFileNameExA(h_process, h_modules[i], module_name, 255)
-                    if module_name.value.decode('utf-8') == dll_path:
-                        h_module = h_modules[i]
-                        break
-
-                if h_module:
-                    # 卸载DLL
-                    h_thread = ctypes.windll.kernel32.CreateRemoteThread(h_process, None, 0,
-                                                                         ctypes.windll.kernel32.FreeLibrary, h_module,
-                                                                         0, None)
-                    ctypes.windll.kernel32.WaitForSingleObject(h_thread, -1)
-                    ctypes.windll.kernel32.CloseHandle(h_thread)
-                    self.injected_dlls[process_id].remove(dll_path)
+            # 获取模块列表
+            hModules = (ctypes.c_void_p * 1024)()
+            cbNeeded = ctypes.c_ulong()
+            
+            if psapi.EnumProcessModules(
+                h_process,
+                ctypes.byref(hModules),
+                ctypes.sizeof(hModules),
+                ctypes.byref(cbNeeded)
+            ):
+                success_count = 0
+                failed_dlls = []
+                
+                for dll_path in dlls_to_uninject:
+                    try:
+                        h_module = None
+                        nModules = cbNeeded.value // ctypes.sizeof(ctypes.c_void_p)
+                        
+                        # 查找DLL模块
+                        for i in range(nModules):
+                            szModule = ctypes.create_unicode_buffer(260)
+                            if psapi.GetModuleFileNameExW(
+                                h_process,
+                                hModules[i],
+                                szModule,
+                                ctypes.sizeof(szModule)
+                            ):
+                                if szModule.value.lower() == dll_path.lower():
+                                    h_module = hModules[i]
+                                    break
+                        
+                        if h_module:
+                            # 获取FreeLibrary地址
+                            h_kernel32 = kernel32.GetModuleHandleW("kernel32.dll")
+                            addr_free_library = kernel32.GetProcAddress(h_kernel32, b"FreeLibrary")
+                            
+                            # 直接使用整数值
+                            module_addr = h_module.value if hasattr(h_module, 'value') else int(h_module)
+                            
+                            # 创建远程线程
+                            thread_h = kernel32.CreateRemoteThread(
+                                h_process,          # 进程句柄
+                                None,               # 默认安全属性
+                                0,                  # 默认堆栈大小
+                                addr_free_library,  # FreeLibrary地址
+                                module_addr,        # 模块句柄（整数值）
+                                0,                  # 立即运行
+                                None                # 不需要线程ID
+                            )
+                            
+                            if thread_h:
+                                # 等待线程完成
+                                kernel32.WaitForSingleObject(thread_h, 5000)
+                                kernel32.CloseHandle(thread_h)
+                                success_count += 1
+                                self.injected_dlls[process_id].remove(dll_path)
+                                self.log_message(f"成功卸载DLL: {dll_path}", level="INFO")
+                            else:
+                                error = ctypes.get_last_error()
+                                failed_dlls.append(dll_path)
+                                self.log_message(f"创建远程线程失败: {dll_path}, 错误码: {error}", level="ERROR")
+                        else:
+                            failed_dlls.append(dll_path)
+                            self.log_message(f"未找到已加载的DLL模块: {dll_path}", level="ERROR")
+                            
+                    except Exception as e:
+                        failed_dlls.append(dll_path)
+                        self.log_message(f"卸载DLL时出错: {dll_path}: {str(e)}", level="ERROR")
+                        
+                # 清理句柄
+                kernel32.CloseHandle(h_process)
+                
+                # 显示结果
+                if success_count > 0:
+                    if failed_dlls:
+                        QMessageBox.warning(
+                            self, 
+                            "部分成功",
+                            f"成功卸载 {success_count} 个DLL\n"
+                            f"失败 {len(failed_dlls)} 个DLL"
+                        )
+                    else:
+                        QMessageBox.information(
+                            self, 
+                            "成功",
+                            f"成功卸载所有选中的DLL ({success_count}个)"
+                        )
                 else:
-                    success = False
-                    break
-
-            ctypes.windll.kernel32.CloseHandle(h_process)
-
-            if success:
-                QMessageBox.information(self, "成功", "DLL取消注入成功")
-                self.log_message("取消注入成功",level="INFO")
-            else:
-                QMessageBox.critical(self, "失败", "某些DLL取消注入失败")
-                self.log_message("取消注入失败",level="ERROR")
-
+                    QMessageBox.critical(
+                        self, 
+                        "失败",
+                        "所有DLL卸载失败"
+                    )
+                    
         except Exception as e:
-            print(f"取消注入失败 错误信息: {e}")
-            QMessageBox.critical(self, "错误", f"取消注入失败 错误: {e}")
-            self.log_message("取消注入失败",level="ERROR")
+            QMessageBox.critical(self, "错误", f"卸载过程出错: {str(e)}")
+            self.log_message(f"卸载过程出错: {str(e)}", level="ERROR")
 
     def toggle_window_highlight(self):
         selected_item = self.process_list.currentItem()
@@ -1093,7 +1409,7 @@ class InjectorGUI(QWidget):
             return
 
         try:
-            process_id = int(selected_item.text().split()[1])
+            process_id = selected_item.pid
             hwnds = []
 
             def enum_window_callback(hwnd, _):
@@ -1108,23 +1424,41 @@ class InjectorGUI(QWidget):
                 for hwnd in hwnds:
                     if win32gui.IsWindow(hwnd) and win32gui.IsWindowEnabled(hwnd):
                         try:
-                            # 将窗口置顶
+                            # 检查窗口是否已经置顶
+                            window_style = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE)
+                            is_topmost = bool(window_style & win32con.WS_EX_TOPMOST)
+                            
+                            # 切换置顶状态
+                            new_pos = win32con.HWND_NOTOPMOST if is_topmost else win32con.HWND_TOPMOST
                             win32gui.SetWindowPos(
                                 hwnd,
-                                win32con.HWND_TOPMOST,
+                                new_pos,
                                 0, 0, 0, 0,
                                 win32con.SWP_NOMOVE | win32con.SWP_NOSIZE
                             )
-                            self.log_message("窗口已置顶", level="INFO")
-                            QMessageBox.information(self, "提示", "窗口已置顶")
+                            
+                            # 更新按钮文字和图标
+                            if is_topmost:
+                                self.hint_button.setText('窗口置顶')
+                                self.hint_button.setIcon(QIcon('icons/hint.png'))
+                                status = "取消置顶"
+                            else:
+                                self.hint_button.setText('取消置顶')
+                                self.hint_button.setIcon(QIcon('icons/hint.png'))
+                                status = "置顶"
+                                
+                            self.log_message(f"窗口已{status}", level="INFO")
+                            QMessageBox.information(self, "提示", f"窗口已{status}")
+                            
                         except Exception as e:
-                            print(f"窗口置顶失败: {e}")
-                            QMessageBox.critical(self, "错误", f"窗口置顶失败: {e}")
+                            self.log_message(f"窗口置顶操作失败: {e}", level="ERROR")
+                            QMessageBox.critical(self, "错误", f"窗口置顶操作失败: {e}")
             else:
-                QMessageBox.warning(self, "错误", "未到与该进程相关的窗口")
+                QMessageBox.warning(self, "错误", "未找到与该进程相关的窗口")
+                self.log_message("未找到与该进程相关的窗口", level="WARNING")
 
         except Exception as e:
-            print(f"处理进程时出错: {e}")
+            self.log_message(f"处理进程时出错: {e}", level="ERROR")
             QMessageBox.critical(self, "错误", f"无法处理该进程: {e}")
 
     def choose_highlight_color(self):
@@ -1137,6 +1471,7 @@ class InjectorGUI(QWidget):
     def select_process(self):
         dialog = QDialog(self)
         dialog.setWindowTitle("选择进程")
+        dialog.setStyleSheet(ScrollBar)
         dialog.setMinimumSize(600, 400)
         layout = QVBoxLayout()
         
@@ -1302,6 +1637,16 @@ class InjectorGUI(QWidget):
                 button.setLayoutDirection(Qt.LeftToRight)  # 居中时使用左对齐
             else:
                 button.setLayoutDirection(Qt.RightToLeft)
+
+    def format_file_path(self, path):
+        """格式化文件路径显示"""
+        max_length = 50  # 最大显示长度
+        if len(path) > max_length:
+            # 保留开头和结尾，中间用...替代
+            head = path[:max_length//2-3]
+            tail = path[-max_length//2:]
+            return f"{head}...{tail}"
+        return path
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
